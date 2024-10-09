@@ -8,13 +8,11 @@ from llama_index.core import (
 )
 
 from flask import (Flask, redirect, render_template, request,
-                   send_from_directory, url_for)
+                   send_from_directory, url_for, Response)
 
 from flask import request
+from twilio.twiml.messaging_response import MessagingResponse
 # from config import *
-
-app = Flask(__name__)
-
 
 
 endpoint = os.environ["AZURE_SEARCH_SERVICE_ENDPOINT"]
@@ -31,6 +29,7 @@ azure_openai_chatgpt_deployment = os.environ["AZURE_OPENAI_CHATGPT_DEPLOYMENT"]
 azure_openai_api_version = os.environ["AZURE_OPENAI_API_VERSION"]
 # embedding_dimensions = int(os.getenv("AZURE_OPENAI_EMBEDDING_DIMENSIONS", 1536))
 
+
 '''
 endpoint = AZURE_SEARCH_SERVICE_ENDPOINT
 credential = AzureKeyCredential(AZURE_SEARCH_ADMIN_KEY) if len(AZURE_SEARCH_ADMIN_KEY) > 0 else DefaultAzureCredential()
@@ -42,10 +41,7 @@ azure_openai_chatgpt_deployment = AZURE_OPENAI_CHATGPT_DEPLOYMENT
 azure_openai_api_version = AZURE_OPENAI_API_VERSION
 '''
 
-index = None
-
 def initialize_index():
-    global index
     from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
     embeddings = AzureOpenAIEmbedding(
         model_name=azure_openai_embedding_model,
@@ -66,7 +62,7 @@ def initialize_index():
     from azure.search.documents.indexes import SearchIndexClient
     from azure.search.documents import SearchClient
     # Index name to use
-    index_name = "llamaindex-vector-test-blog"
+    index_name = "llamaindex-vector-test-blog-jsh-demo"
 
     # Use index client to demonstrate creating an index
     index_client = SearchClient(
@@ -117,11 +113,17 @@ def initialize_index():
         storage_context=storage_context,
     )
     print("Index Initialized")
+    return index
     
-@app.route("/query", methods=["GET"])
+app = Flask(__name__)
+app.index = initialize_index()
+
+    
+@app.route("/query", methods=["GET","POST"])
 def query_index():
-    global index
-    query_text = request.args.get("text", None)
+    index = app.index
+    # query_text = request.args.get("text", None)
+    query_text = request.values.get('Body', None)
     if query_text is None:
         return (
             "No text found, please include a ?text=blah parameter in the URL",
@@ -150,7 +152,7 @@ def query_index():
     blog_tool = QueryEngineTool.from_defaults(
         query_engine=blog_query_engine,
         description=(
-            "Useful for summarization questions related to Prime Minister of India"
+            "Useful for summarization questions related to Prime Minister of India, president of USA and Jain Society of Houston (JSH) and Frequently Asked Questions (FAQs)"
         ),
     )
 
@@ -176,7 +178,14 @@ def query_index():
     )
     
     response = query_engine.query(query_text)
-    return str(response), 200
+    
+    # Start our TwiML response
+    resp = MessagingResponse()
+    # response_pass = resp.message(str(response))
+    response_pass = resp.message()
+    response_pass.body(str(response))
+    # return Response(str(response_pass), mimetype="application/xml")
+    return str(resp)
 
 @app.route('/')
 def index():
@@ -200,12 +209,10 @@ def hello():
        return redirect(url_for('index'))
 
 
-# if __name__ == '__main__':
-#    app.run()
+if __name__ == '__main__':
+   app.run()
 
-if __name__ == "__main__":
-    # init the global index
-    print("initializing index...")
-    initialize_index()
+# if __name__ == "__main__":
+#     # init the global index
 
-    app.run(host="0.0.0.0", port=5601)
+#     app.run(host="0.0.0.0", port=5601)
